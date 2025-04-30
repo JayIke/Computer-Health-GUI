@@ -1,0 +1,15 @@
+[package]
+name = "windows_monitor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-web = "4"
+tera = "1.19"
+windows = { version = "0.52", features = [
+    "Win32_System_SystemInformation",
+    "Win32_System_Performance",
+    "Win32_System_Memory",
+    "Win32_System_SystemInformation",
+    "Win32_System_Registry"
+] }
