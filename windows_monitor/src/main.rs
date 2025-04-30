@@ -1,7 +1,8 @@
 use actix_web::{web, App, HttpServer, Responder, HttpResponse};
 use tera::{Tera, Context};
 use windows::Win32::System::SystemInformation::{GetTickCount64, GlobalMemoryStatusEx, MEMORYSTATUSEX};
-use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD, PCWSTR};
+use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD};
+use windows::core::PCWSTR;
 use std::mem::size_of;
 use std::ffi::c_void;
 use std::ffi::OsStr;
@@ -21,7 +22,7 @@ fn get_memory_info() -> String {
         ..Default::default()
     };
     unsafe {
-        if GlobalMemoryStatusEx(&mut mem_status).as_bool() {
+        if GlobalMemoryStatusEx(&mut mem_status).is_ok() {
             let total = mem_status.ullTotalPhys / 1024 / 1024;
             let avail = mem_status.ullAvailPhys / 1024 / 1024;
             let used = total - avail;
