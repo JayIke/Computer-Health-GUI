@@ -24,6 +24,12 @@
         <p><strong>Memory Usage:</strong> {{ memory }}</p>
         <p><strong>CPU Speed:</strong> {{ cpu_speed }}</p>
         <p><strong>Disk Usage:</strong> {{ disk_space }}</p>
+        <p><strong>Network Stats:</strong></p>
+        <ul>
+            {% for name, stats in network_info %}
+                <li>{{ name }}: {{ stats }}</li>
+            {% endfor %}
+        </ul> 
     </div>
 </body>
 </html>

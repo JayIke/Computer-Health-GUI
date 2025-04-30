@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+url = "2"
 actix-web = "4"
 tera = "1.19"
 windows = { version = "0.52", features = [
