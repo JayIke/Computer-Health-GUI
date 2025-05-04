@@ -3,85 +3,57 @@ use actix_web::{web, App, HttpServer, HttpResponse, Result as ActixResult};
 use tera::{Tera, Context};
 use windows::Win32::System::SystemInformation::{GetTickCount64, GlobalMemoryStatusEx, MEMORYSTATUSEX};
 use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD};
-use windows::Win32::NetworkManagement::IpHelper::{GetIfTable, MIB_IFTABLE};
+use windows::Win32::NetworkManagement::IpHelper::{GetIfTable, MIB_IFTABLE, MIB_IFROW};
 use windows::Win32::Foundation::BOOL;
 use windows::core::PCWSTR;
-use std::mem::size_of;
+use std::mem;
+use std::num::NonZeroU32;
+use std::ptr;
 use std::ffi::c_void;
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
-use std::collections::HashMap;
-use url::form_urlencoded;
 
 
-  
 
-fn get_interface_list() -> Vec<(u32, String)> {
+
+pub fn get_interface_list() -> Vec<(u32, String)> {
     unsafe {
-        let mut size = 0;
+        let mut size: u32 = 0;
 
-        // First call to get the required buffer size
-        if GetIfTable::<BOOL>(None, &mut size, false.into()) != 0 {
-            eprintln!("Failed to get size for interface table.");
+        // First call with None to get the required size
+        let result = GetIfTable::<BOOL>(None, &mut size, BOOL(0));
+        if result != 122 {  // 122 = ERROR_INSUFFICIENT_BUFFER
+            eprintln!("GetIfTable failed to determine buffer size. Error code: {}", result);
             return vec![];
         }
 
+        // Allocate a buffer large enough to hold the table
         let mut buffer = vec![0u8; size as usize];
         let table_ptr = buffer.as_mut_ptr() as *mut MIB_IFTABLE;
 
-        if GetIfTable::<BOOL>(Some(table_ptr), &mut size, false.into()) == 0 {
-            let table: &MIB_IFTABLE = &*table_ptr;
-            let mut interfaces = Vec::new();
-
-            for i in 0..table.dwNumEntries as usize {
-                let row = &table.table[i];
-                let name = String::from_utf8_lossy(&row.bDescr)
-                    .trim_matches(char::from(0))
-                    .to_string();
-
-                // Log the interface for debugging
-                println!("Interface found: index={} name={}", row.dwIndex, name);
-
-                interfaces.push((row.dwIndex, name));
-            }
-
-            interfaces
-        } else {
-            eprintln!("Failed to get interface table.");
-            vec![]
+        // Second call with allocated buffer
+        let result = GetIfTable::<BOOL>(Some(table_ptr), &mut size, BOOL(0));
+        if result != 0 {
+            eprintln!("GetIfTable failed to retrieve the table. Error code: {}", result);
+            return vec![];
         }
-    }
-}
 
+        let num_entries = (*table_ptr).dwNumEntries as usize;
+        let row_ptr = &(*table_ptr).table as *const MIB_IFROW;
 
+        let mut interfaces = Vec::new();
+        for i in 0..num_entries {
+            let row = &*row_ptr.add(i);
+            let name = String::from_utf8_lossy(&row.bDescr)
+                .trim_end_matches(char::from(0))
+                .to_string();
 
-fn get_network_stats_for(index: u32) -> String {
-    unsafe {
-        let mut size = 0;
-        // Explicitly specify the type for P0
-        let _ = GetIfTable::<BOOL>(None, &mut size, false.into()); // 1st call to get size
-        let mut buffer = vec![0u8; size as usize];
-        let table_ptr = buffer.as_mut_ptr() as *mut MIB_IFTABLE;
-
-        if GetIfTable::<BOOL>(Some(table_ptr), &mut size, false.into()) == 0 {
-            let table = &*table_ptr;
-            let num_entries = table.dwNumEntries as usize;
-
-            // Check if the index is within bounds before proceeding
-            if index as usize >= num_entries {
-                return "Invalid interface index.".to_string();
-            }
-
-            // Loop through interfaces and find the correct one
-            for i in 0..num_entries {
-                let row = &table.table[i];
-                if row.dwIndex == index {
-                    return format!("{} bytes in / {} bytes out", row.dwInOctets, row.dwOutOctets);
-                }
-            }
+            println!("Interface found: index={} name={}", row.dwIndex, name);
+            interfaces.push((row.dwIndex, name));
         }
+
+        interfaces
     }
-    "Interface not found.".to_string()
 }
 
 
@@ -148,7 +120,7 @@ async fn index(req: HttpRequest, tmpl: web::Data<tera::Tera>) -> ActixResult<Htt
     //let params: HashMap<_, _> = form_urlencoded::parse(query.as_bytes()).into_owned().collect();
 
     // Use the real interface list
-    let interfaces = get_interface_list(); // Vec<(u32, String)>
+    //let interfaces = get_interface_list(); // Vec<(u32, String)>
 
     //let iface_index = params
     //.get("iface")
@@ -156,13 +128,7 @@ async fn index(req: HttpRequest, tmpl: web::Data<tera::Tera>) -> ActixResult<Htt
     //.filter(|&i| i < interfaces.len())  // ensures the index is valid
     //.unwrap_or(0); // fallback to 0 if not
     
-    let network_info: Vec<(String, String)> = interfaces
-    .iter()
-    .map(|(idx, name)| {
-        let stats = get_network_stats_for(*idx);
-        (name.clone(), stats)
-    })
-    .collect();
+   
 
     
 
@@ -173,7 +139,7 @@ async fn index(req: HttpRequest, tmpl: web::Data<tera::Tera>) -> ActixResult<Htt
     ctx.insert("memory", &get_memory_info());
     ctx.insert("cpu_speed", &get_cpu_speed());
     ctx.insert("disk_space", &get_disk_space());
-    ctx.insert("network_info", &network_info);
+    ctx.insert("network_info", &get_interface_list());
 
     // Render HTML
     let rendered = tmpl.render("index.html", &ctx)
