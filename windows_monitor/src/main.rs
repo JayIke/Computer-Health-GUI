@@ -6,9 +6,6 @@ use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_
 use windows::Win32::NetworkManagement::IpHelper::{GetIfTable, MIB_IFTABLE, MIB_IFROW};
 use windows::Win32::Foundation::BOOL;
 use windows::core::PCWSTR;
-use std::mem;
-use std::num::NonZeroU32;
-use std::ptr;
 use std::ffi::c_void;
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
@@ -127,11 +124,6 @@ async fn index(req: HttpRequest, tmpl: web::Data<tera::Tera>) -> ActixResult<Htt
     //.and_then(|v| v.parse::<usize>().ok())
     //.filter(|&i| i < interfaces.len())  // ensures the index is valid
     //.unwrap_or(0); // fallback to 0 if not
-    
-   
-
-    
-
 
     // Prepare context for template rendering
     let mut ctx = Context::new();
